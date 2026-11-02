@@ -112,9 +112,9 @@ internal fun OnboardingScreen(
                 index = if (Build.VERSION.SDK_INT >= 33) "3" else "1",
                 title = "打开无障碍",
                 body = if (accessibilityOn) {
-                    "无障碍已经开着。界面文字和点击会从这里读。"
+                    "无障碍已经开着。界面文字和点击会从这里读。控机默认开，设置里可以关掉。"
                 } else {
-                    "到系统无障碍里打开「自记」。它只读窗口，不会替你点屏幕。"
+                    "到系统无障碍里打开「自记」。它会读窗口。控机默认开，设置里可以关掉；关掉之后只观察。"
                 },
                 action = if (accessibilityOn) "已开启" else "打开无障碍设置",
                 enabled = !accessibilityOn,

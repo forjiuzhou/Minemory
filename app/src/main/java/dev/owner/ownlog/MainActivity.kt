@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.owner.ownlog.service.CaptureBridge
 import dev.owner.ownlog.service.CaptureReminder
+import dev.owner.ownlog.ui.ControlScreen
 import dev.owner.ownlog.ui.InboxScreen
 import dev.owner.ownlog.ui.OnboardingScreen
 import dev.owner.ownlog.ui.OwnLogTheme
@@ -75,6 +76,7 @@ class MainActivity : ComponentActivity() {
             OwnLogTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     var settingsOpen by rememberSaveable { mutableStateOf(openSettings) }
+                    var controlOpen by rememberSaveable { mutableStateOf(false) }
                     val showOnboarding = settings.deepMode && !settings.onboardingDone
                     when {
                         showOnboarding -> OnboardingScreen(
@@ -86,7 +88,11 @@ class MainActivity : ComponentActivity() {
                                 }
                             },
                         )
-                        settingsOpen -> SettingsScreen(onBack = { settingsOpen = false })
+                        controlOpen -> ControlScreen(onBack = { controlOpen = false })
+                        settingsOpen -> SettingsScreen(
+                            onBack = { settingsOpen = false },
+                            onOpenControl = { controlOpen = true },
+                        )
                         else -> InboxScreen(
                             onOpenSettings = { settingsOpen = true },
                             onRequestProjection = { projectionLauncher.launch(screenCaptureIntent(context)) },

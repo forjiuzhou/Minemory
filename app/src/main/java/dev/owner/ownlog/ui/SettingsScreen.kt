@@ -85,7 +85,7 @@ import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun SettingsScreen(onBack: (() -> Unit)? = null) {
+internal fun SettingsScreen(onBack: (() -> Unit)? = null, onOpenControl: () -> Unit = {}) {
     val context = LocalContext.current
     val app = context.applicationContext as OwnLogApp
     val scope = rememberCoroutineScope()
@@ -508,6 +508,24 @@ internal fun SettingsScreen(onBack: (() -> Unit)? = null) {
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+            }
+
+            SectionCard("操作") {
+                ToggleRow(
+                    "允许操作手机",
+                    "默认开。点击、滑动、返回，以及往非密码输入框写字。关掉后只观察",
+                    settings.enableControl,
+                ) { enabled ->
+                    scope.launch { app.settings.setControlEnabled(enabled) }
+                }
+                Text(
+                    "和采集共用同一个无障碍服务。密码框不写。点下面可以试一条命令。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedButton(onClick = onOpenControl, modifier = Modifier.fillMaxWidth()) {
+                    Text("试试操作")
                 }
             }
 

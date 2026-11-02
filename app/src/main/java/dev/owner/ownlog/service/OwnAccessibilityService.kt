@@ -17,6 +17,8 @@ import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import dev.owner.ownlog.OwnLogApp
 import dev.owner.ownlog.domain.ClickSnap
+import dev.owner.ownlog.domain.ControlCommand
+import dev.owner.ownlog.domain.ControlResult
 import dev.owner.ownlog.domain.PasswordSignals
 import dev.owner.ownlog.domain.TextNode
 import kotlin.coroutines.resume
@@ -93,6 +95,12 @@ class OwnAccessibilityService : AccessibilityService() {
                 if (!overlay) scheduleSnapshot(event.windowId, title = null, stateChange = false)
             }
         }
+    }
+
+    internal suspend fun runControl(command: ControlCommand): ControlResult {
+        val app = application as? OwnLogApp ?: return ControlResult.refused("控机不可用")
+        if (!app.settings.get().enableControl) return ControlResult.refused("控机已关闭")
+        return AccessibilityActuator(this).run(command)
     }
 
     suspend fun captureViaAccessibility(): Bitmap? {

@@ -1,6 +1,6 @@
 # 自记 MCP
 
-函数名是 `ownlog-mcp`。任意支持 Streamable HTTP 的代理（Cursor、Claude、ChatGPT、Grok Bot 等）只要有地址和一只 `olk_` 令牌，就能读你的自记。手机应用本身不调用这个接口。
+函数名是 `ownlog-mcp`。任意支持 Streamable HTTP 的代理（Cursor、Claude、ChatGPT、Grok Bot 等）只要有地址和一只 `olk_` 令牌，就能读你的自记。手机应用本身不调用这个接口。这个接口不能操作手机。本机控机是另一条路，见 [control.md](control.md)。
 
 边缘函数入口是 `supabase/functions/ownlog-mcp/index.ts`，只负责读 `SUPABASE_URL` 和 `SUPABASE_SERVICE_ROLE_KEY`，然后把请求交给同一套工具代码。在自己的机器上跑见 [self-host.md](self-host.md)。
 

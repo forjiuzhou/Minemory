@@ -121,6 +121,10 @@
         </service>
 
         <service
+            android:name=".service.ControlBinderService"
+            android:exported="false" />
+
+        <service
             android:name=".service.OwnNotificationListenerService"
             android:exported="true"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">

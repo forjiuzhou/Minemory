@@ -51,6 +51,8 @@ internal object CaptureBridge {
         }
     }
 
+    fun accessibilityService(): OwnAccessibilityService? = accessibility
+
     suspend fun capture(): CapturedFrame? {
         val fromProjection = projection?.takeIf { projectionState.value }?.captureFrame()
         if (fromProjection != null) {
