@@ -1,0 +1,8 @@
+# ownlog-mcp authenticates with its own Bearer olk_ token.
+# The Supabase gateway must not require a user JWT.
+# deploy_edge_function must pass verify_jwt = false as well.
+
+project_id = "ownlog"
+
+[functions.ownlog-mcp]
+verify_jwt = false

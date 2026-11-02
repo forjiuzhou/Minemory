@@ -1,0 +1,2 @@
+-keep class dev.owner.ownlog.data.** { *; }
+-keep class com.google.mlkit.** { *; }

@@ -1,0 +1,9 @@
+# Copy to local.properties. sdk.dir is required to build.
+# Supabase values are optional: the app also has a settings screen.
+sdk.dir=/opt/android-sdk
+
+# Project URL only, for example https://xxxx.supabase.co
+SUPABASE_URL=
+# publishable key (sb_publishable_...) or legacy anon JWT (eyJ...).
+# Do not put an sb_secret_ or service_role key here.
+SUPABASE_ANON_KEY=
