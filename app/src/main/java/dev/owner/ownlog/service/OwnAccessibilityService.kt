@@ -16,12 +16,15 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import dev.owner.ownlog.OwnLogApp
+import dev.owner.ownlog.MainActivity
 import dev.owner.ownlog.domain.ClickSnap
 import dev.owner.ownlog.domain.ControlCommand
 import dev.owner.ownlog.domain.ControlResult
 import dev.owner.ownlog.domain.PasswordSignals
 import dev.owner.ownlog.domain.TextNode
 import kotlin.coroutines.resume
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 
 class OwnAccessibilityService : AccessibilityService() {
@@ -30,6 +33,7 @@ class OwnAccessibilityService : AccessibilityService() {
     private var pendingTitle: String? = null
     private var pendingWindowKey: String? = null
     private var pendingStateChange = false
+    private var remoteWatch: Job? = null
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -55,9 +59,24 @@ class OwnAccessibilityService : AccessibilityService() {
             @Suppress("UnspecifiedRegisterReceiverFlag")
             registerReceiver(screenReceiver, filter)
         }
+        val app = application as? OwnLogApp
+        if (app != null) {
+            remoteWatch = app.appScope.launch {
+                app.settings.flow.collect { settings ->
+                    if (settings.enableRemote) {
+                        RemoteControlService.start(this@OwnAccessibilityService)
+                    } else {
+                        RemoteControlService.stop(this@OwnAccessibilityService)
+                    }
+                }
+            }
+        }
     }
 
     override fun onDestroy() {
+        remoteWatch?.cancel()
+        remoteWatch = null
+        RemoteControlService.stop(this)
         CaptureBridge.detachAccessibility(this)
         mainHandler.removeCallbacksAndMessages(null)
         try {
@@ -101,6 +120,17 @@ class OwnAccessibilityService : AccessibilityService() {
         val app = application as? OwnLogApp ?: return ControlResult.refused("控机不可用")
         if (!app.settings.get().enableControl) return ControlResult.refused("控机已关闭")
         return AccessibilityActuator(this).run(command)
+    }
+
+    internal fun backgroundSelf() {
+        val launch = Intent(this, MainActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            putExtra(MainActivity.EXTRA_MOVE_BACK, true)
+        }
+        try {
+            startActivity(launch)
+        } catch (_: Exception) {
+        }
     }
 
     suspend fun captureViaAccessibility(): Bitmap? {

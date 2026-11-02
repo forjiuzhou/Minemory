@@ -519,8 +519,20 @@ internal fun SettingsScreen(onBack: (() -> Unit)? = null, onOpenControl: () -> U
                 ) { enabled ->
                     scope.launch { app.settings.setControlEnabled(enabled) }
                 }
+                ToggleRow(
+                    "允许远程控制",
+                    if (settings.enableControl) {
+                        "默认开。外部代理可以打开应用、点按、滑动，并读取当前界面文字"
+                    } else {
+                        "先打开「允许操作手机」。关掉之后，代理不能操作这台手机"
+                    },
+                    settings.enableRemote,
+                    enabled = settings.enableControl,
+                ) { enabled ->
+                    scope.launch { app.settings.setRemoteEnabled(enabled) }
+                }
                 Text(
-                    "和采集共用同一个无障碍服务。密码框不写。点下面可以试一条命令。",
+                    "和采集共用同一个无障碍服务。密码框不写。远程命令走已登录的账号，不在手机上开端口。点下面可以试一条本机命令。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -639,13 +651,19 @@ private fun SectionCard(title: String, content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun ToggleRow(title: String, subtitle: String, checked: Boolean, onChecked: (Boolean) -> Unit) {
+private fun ToggleRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    enabled: Boolean = true,
+    onChecked: (Boolean) -> Unit,
+) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.bodyLarge)
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Switch(checked = checked, onCheckedChange = onChecked)
+        Switch(checked = checked, onCheckedChange = onChecked, enabled = enabled)
     }
 }
 

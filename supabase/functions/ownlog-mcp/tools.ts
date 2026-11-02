@@ -27,11 +27,12 @@ import {
   zonedStart,
 } from "./pure.ts";
 import type { EventQuery, EventRow, Store } from "./store.ts";
+import { phoneToolSpecs } from "./phone.ts";
 
 export const FILE_URL_SECONDS = 3600;
 
 export type ToolContext = {
-  token: { id: string; user_id: string; scopes: string[]; can_write: boolean };
+  token: { id: string; user_id: string; scopes: string[]; can_write: boolean; can_control: boolean };
   store: Store;
   now: Date;
 };
@@ -404,7 +405,7 @@ const readOnly = {
   openWorldHint: false,
 };
 
-export const TOOLS = [
+const CORE_TOOLS = [
   {
     name: "search",
     title: "搜索记录",
@@ -512,3 +513,15 @@ export const TOOLS = [
     call: stats,
   },
 ] as const;
+
+export const TOOLS = [
+  ...CORE_TOOLS,
+  ...phoneToolSpecs().map((tool) => ({
+    name: tool.name,
+    title: tool.title,
+    description: tool.description,
+    inputSchema: tool.inputSchema,
+    annotations: tool.annotations,
+    call: (args: AnyArgs, ctx: ToolContext) => tool.call(args, ctx),
+  })),
+];

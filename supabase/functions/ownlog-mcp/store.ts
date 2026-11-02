@@ -7,6 +7,7 @@ export type AgentToken = {
   user_id: string;
   scopes: string[];
   can_write: boolean;
+  can_control: boolean;
 };
 
 export type EventRow = {
@@ -62,6 +63,37 @@ export type AccessLog = {
   resultCount: number | null;
 };
 
+export type PhoneCommandRow = {
+  id: string;
+  user_id: string;
+  device_id: string | null;
+  action: string;
+  args: Record<string, unknown>;
+  status: string;
+  result: Record<string, unknown> | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  expires_at: string;
+};
+
+export type PhonePresence = {
+  user_id: string;
+  device_id: string | null;
+  a11y_connected: boolean;
+  remote_enabled: boolean;
+  foreground_package: string | null;
+  last_seen: string;
+};
+
+export type PhoneEnqueue = {
+  userId: string;
+  tokenId: string;
+  action: string;
+  args: Record<string, unknown>;
+  expiresAt: string;
+};
+
 export interface Store {
   findToken(tokenHash: string): Promise<AgentToken | null>;
   touchToken(id: string, atIso: string): Promise<void>;
@@ -71,6 +103,17 @@ export interface Store {
   getEvent(userId: string, id: string): Promise<EventRow | null>;
   updateEvent(userId: string, id: string, patch: EventPatch): Promise<EventRow | null>;
   signFile(path: string, expiresInSeconds: number): Promise<string | null>;
+  enqueuePhoneCommand(input: PhoneEnqueue): Promise<PhoneCommandRow>;
+  getPhoneCommand(userId: string, id: string): Promise<PhoneCommandRow | null>;
+  settlePhoneCommand(
+    userId: string,
+    id: string,
+    fromStatus: string,
+    toStatus: "cancelled" | "failed",
+    result: Record<string, unknown>,
+    atIso: string,
+  ): Promise<PhoneCommandRow | null>;
+  phoneStatus(userId: string, nowIso: string): Promise<{ presence: PhonePresence | null; pending: number }>;
 }
 
 export const EVENT_SELECT: Record<EventColumns, string> = {

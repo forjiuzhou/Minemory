@@ -24,7 +24,7 @@
 
 自记自己的界面不记。没有应用黑名单。1.5 秒内的进出闪一下会被收成同一次会话。
 
-代理查询见 [docs/agent-queries.md](docs/agent-queries.md)。远程 MCP 见 [docs/mcp.md](docs/mcp.md)，自建见 [docs/self-host.md](docs/self-host.md)。本机控机见 [docs/control.md](docs/control.md)。远程 MCP 不能操作手机。
+代理查询见 [docs/agent-queries.md](docs/agent-queries.md)。远程 MCP 见 [docs/mcp.md](docs/mcp.md)，自建见 [docs/self-host.md](docs/self-host.md)。本机控机和远程控机见 [docs/control.md](docs/control.md)。只有 `can_control` 的 `olk_` 令牌可以操作手机。
 
 ## 构建
 
@@ -126,6 +126,8 @@ type 你好
 
 本机给以后的伴侣进程留了一个不导出的 Binder：`dev.owner.ownlog.service.ControlBinderService`。没有 intent-filter，不监听端口。只有同一个 UID 能 bind。协议写在 [docs/control.md](docs/control.md)。
 
+远程控机不走 Binder。代理调用 MCP 的 `phone_*`（令牌要 `can_control`），手机用登录用户的 access token 领取 `phone_commands` 并执行。设置里还有「允许远程控制」，默认开，但本机「允许操作手机」关着时不会执行。密码框仍然拒绝写入。详情在 [docs/control.md](docs/control.md) 和 [docs/mcp.md](docs/mcp.md)。
+
 ## 配置 Supabase
 
 1. 新建一个项目。
@@ -133,6 +135,8 @@ type 你好
    1. [supabase/migrations/20261022000000_events.sql](supabase/migrations/20261022000000_events.sql)
    2. [supabase/migrations/20261022160000_inbox.sql](supabase/migrations/20261022160000_inbox.sql)
    3. [supabase/migrations/20261022180000_owner_auth.sql](supabase/migrations/20261022180000_owner_auth.sql)
+   4. [supabase/migrations/20261022200000_agent_mcp.sql](supabase/migrations/20261022200000_agent_mcp.sql)
+   5. [supabase/migrations/20261102180000_phone_control.sql](supabase/migrations/20261102180000_phone_control.sql)
 3. 打开 **Authentication → Providers**，确认 Email 可用，并**关掉公开注册**（Disable signups）。不要让别人用这个网址自己开账号。
 4. 打开 **Authentication → Users**，点 Add user，填你自己的邮箱和密码，创建这个账号。应用不会替你注册。
 5. 打开 Connect，复制 Project URL，以及 publishable key（`sb_publishable_...`）。旧项目的 anon public key（`eyJ...`）也可以。

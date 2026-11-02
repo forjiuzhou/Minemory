@@ -39,6 +39,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        consumeMoveBack(intent)
         if (savedInstanceState == null && intent.getBooleanExtra(EXTRA_GRANT_CAPTURE, false)) {
             grantRequests.value = 1
         }
@@ -106,6 +107,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        consumeMoveBack(intent)
         if (intent.getBooleanExtra(EXTRA_GRANT_CAPTURE, false)) {
             grantRequests.value = grantRequests.value + 1
         }
@@ -114,5 +116,12 @@ class MainActivity : ComponentActivity() {
     companion object {
         const val EXTRA_SETTINGS = "open_settings"
         const val EXTRA_GRANT_CAPTURE = "grant_capture"
+        const val EXTRA_MOVE_BACK = "move_back"
+    }
+
+    private fun consumeMoveBack(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_MOVE_BACK, false) != true) return
+        intent.removeExtra(EXTRA_MOVE_BACK)
+        moveTaskToBack(true)
     }
 }

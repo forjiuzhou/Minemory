@@ -12,11 +12,20 @@ sealed class ControlCommand {
     data object Home : ControlCommand()
     data object Recents : ControlCommand()
     data class Swipe(val direction: SwipeDirection) : ControlCommand()
+    data class SwipePath(
+        val x1: Float,
+        val y1: Float,
+        val x2: Float,
+        val y2: Float,
+        val durationMs: Long,
+    ) : ControlCommand()
     data class SetText(val text: String) : ControlCommand()
+    data class Wait(val millis: Long) : ControlCommand()
+    data object DumpUi : ControlCommand()
 
     /** Tap, type, and swipe should hit the app underneath 自记, not this screen. */
     val backgroundsFirst: Boolean
-        get() = this is TapText || this is TapId || this is SetText || this is Swipe
+        get() = this is TapText || this is TapId || this is SetText || this is Swipe || this is SwipePath
 }
 
 enum class SwipeDirection {
@@ -63,10 +72,18 @@ data class SwipeStroke(
 
 object ControlPolicy {
     const val ENABLED_BY_DEFAULT = true
+    const val REMOTE_ENABLED_BY_DEFAULT = true
     const val MAX_SET_TEXT = 2000
     const val MAX_TAP_TEXT = 200
+    const val MAX_WAIT_MS = 10_000L
 
     fun controlEnabled(stored: Boolean?): Boolean = stored ?: ENABLED_BY_DEFAULT
+
+    /** Remote control rides on the local switch. Unset means on, but only while local control is on. */
+    fun remoteEnabled(stored: Boolean?, controlEnabled: Boolean): Boolean {
+        if (!controlEnabled) return false
+        return stored ?: REMOTE_ENABLED_BY_DEFAULT
+    }
 
     fun isViewId(raw: String): Boolean {
         val id = raw.trim()
@@ -91,8 +108,23 @@ object ControlPolicy {
             !isViewId(command.viewId) -> ControlResult.refused("view id 要写成 包名:id/名字")
             else -> null
         }
+        is ControlCommand.Wait -> when {
+            command.millis !in 1..MAX_WAIT_MS -> ControlResult.refused("等待时间要在 1 到 10000 毫秒")
+            else -> null
+        }
+        is ControlCommand.SwipePath -> when {
+            !command.sane() -> ControlResult.refused("滑动坐标无效")
+            else -> null
+        }
         else -> null
     }
+}
+
+private fun ControlCommand.SwipePath.sane(): Boolean {
+    val coords = listOf(x1, y1, x2, y2)
+    if (coords.any { !it.isFinite() || it < 0f || it > 20_000f }) return false
+    if (durationMs !in 50L..3_000L) return false
+    return x1 != x2 || y1 != y2
 }
 
 object ControlCommands {

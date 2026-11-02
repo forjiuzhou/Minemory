@@ -2,7 +2,7 @@ import { assertEquals } from "jsr:@std/assert@1";
 
 import { sha256Hex } from "./auth.ts";
 import { createHandler } from "./http.ts";
-import type { AccessLog, AgentToken, EventPatch, EventQuery, EventRow, SearchQuery, Store } from "./store.ts";
+import type { AccessLog, AgentToken, EventPatch, EventQuery, EventRow, PhoneCommandRow, PhoneEnqueue, PhonePresence, SearchQuery, Store } from "./store.ts";
 
 const TOKEN = `olk_${"b".repeat(40)}`;
 const USER = "11111111-1111-4111-8111-111111111111";
@@ -52,6 +52,16 @@ Deno.test("mcp http: auth, initialize, tools, and scoped calls", async () => {
     "inbox",
     "annotate",
     "stats",
+    "phone_status",
+    "phone_dump_ui",
+    "phone_tap",
+    "phone_swipe",
+    "phone_back",
+    "phone_home",
+    "phone_recents",
+    "phone_type",
+    "phone_open_app",
+    "phone_wait",
   ]);
 
   const ping = await rpc(handler, { jsonrpc: "2.0", id: 3, method: "ping" });
@@ -137,6 +147,48 @@ Deno.test("mcp http: auth, initialize, tools, and scoped calls", async () => {
   const apps = JSON.parse((await usage.json()).result.content[0].text).apps;
   assertEquals(apps[0].duration_ms, 5000);
   assertEquals(apps[0].sessions, 1);
+
+  const blocked = await rpc(handler, {
+    jsonrpc: "2.0",
+    id: 11,
+    method: "tools/call",
+    params: { name: "phone_tap", arguments: { text: "搜索" } },
+  });
+  const blockedBody = await blocked.json();
+  assertEquals(blockedBody.result.isError, true);
+  assertEquals(JSON.parse(blockedBody.result.content[0].text).error.includes("can_control"), true);
+  assertEquals(store.enqueued.length, 0);
+});
+
+Deno.test("mcp http: can_control token waits for the phone result", async () => {
+  const hash = await sha256Hex(TOKEN);
+  const logs: AccessLog[] = [];
+  const store = new FakeStore(hash, logs, { canControl: true, autoFinish: true });
+  const handler = createHandler(store, { now: () => new Date("2026-10-22T04:00:00.000Z") });
+  const tapped = await rpc(handler, {
+    jsonrpc: "2.0",
+    id: 12,
+    method: "tools/call",
+    params: { name: "phone_open_app", arguments: { name: "小红书" } },
+  });
+  const body = await tapped.json();
+  const payload = JSON.parse(body.result.content[0].text);
+  assertEquals(body.result.isError ?? false, false);
+  assertEquals(payload.ok, true);
+  assertEquals(payload.foreground_package, "com.xingin.xhs");
+  assertEquals(String(payload.ui_tree).includes("package=com.xingin.xhs"), true);
+  assertEquals(store.enqueued[0]?.action, "open_app");
+  assertEquals(store.enqueued[0]?.args, { name: "小红书" });
+  assertEquals(logs.at(-1)?.tool, "phone_open_app");
+
+  const typed = await rpc(handler, {
+    jsonrpc: "2.0",
+    id: 13,
+    method: "tools/call",
+    params: { name: "phone_type", arguments: { text: "不要记进日志" } },
+  });
+  assertEquals((await typed.json()).result.isError ?? false, false);
+  assertEquals(logs.at(-1)?.args, { text: "[6 chars]" });
 });
 
 function post(body: unknown, headers: Record<string, string> = {}): Request {
@@ -158,7 +210,12 @@ function rpc(handler: (req: Request) => Promise<Response>, body: unknown, header
 
 class FakeStore implements Store {
   lastSearch: SearchQuery | null = null;
-  constructor(private readonly hash: string, private readonly logs: AccessLog[]) {}
+  readonly enqueued: PhoneEnqueue[] = [];
+  constructor(
+    private readonly hash: string,
+    private readonly logs: AccessLog[],
+    private readonly options: { canControl?: boolean; autoFinish?: boolean } = {},
+  ) {}
 
   findToken(tokenHash: string): Promise<AgentToken | null> {
     if (tokenHash !== this.hash) return Promise.resolve(null);
@@ -168,6 +225,7 @@ class FakeStore implements Store {
       user_id: USER,
       scopes: ["note", "photo", "ui_text", "app_fg", "app_bg", "location"],
       can_write: false,
+      can_control: this.options.canControl === true,
     });
   }
 
@@ -245,5 +303,72 @@ class FakeStore implements Store {
   signFile(path: string): Promise<string | null> {
     assertEquals(path, "uid/2026/10/a.jpg");
     return Promise.resolve("https://files.example/signed");
+  }
+
+  enqueuePhoneCommand(input: PhoneEnqueue): Promise<PhoneCommandRow> {
+    this.enqueued.push(input);
+    const done = this.options.autoFinish === true;
+    return Promise.resolve({
+      id: "88888888-8888-4888-8888-888888888888",
+      user_id: input.userId,
+      device_id: null,
+      action: input.action,
+      args: input.args,
+      status: done ? "done" : "pending",
+      result: done
+        ? { ok: true, message: "已打开", foreground_package: "com.xingin.xhs", ui_tree: "package=com.xingin.xhs", ui_truncated: false, duration_ms: 20 }
+        : null,
+      created_at: "2026-10-22T04:00:00.000Z",
+      started_at: done ? "2026-10-22T04:00:00.000Z" : null,
+      finished_at: done ? "2026-10-22T04:00:01.000Z" : null,
+      expires_at: input.expiresAt,
+    });
+  }
+
+  getPhoneCommand(_userId: string, id: string): Promise<PhoneCommandRow | null> {
+    const created = this.enqueued.at(-1);
+    if (!created) return Promise.resolve(null);
+    const done = this.options.autoFinish === true;
+    return Promise.resolve({
+      id,
+      user_id: created.userId,
+      device_id: null,
+      action: created.action,
+      args: created.args,
+      status: done ? "done" : "pending",
+      result: done
+        ? {
+          ok: true,
+          message: "已打开",
+          foreground_package: "com.xingin.xhs",
+          ui_tree: "package=com.xingin.xhs",
+          ui_truncated: false,
+          duration_ms: 20,
+        }
+        : null,
+      created_at: "2026-10-22T04:00:00.000Z",
+      started_at: null,
+      finished_at: done ? "2026-10-22T04:00:01.000Z" : null,
+      expires_at: created.expiresAt,
+    });
+  }
+
+  settlePhoneCommand(): Promise<PhoneCommandRow | null> {
+    return Promise.resolve(null);
+  }
+
+  phoneStatus(): Promise<{ presence: PhonePresence | null; pending: number }> {
+    if (this.options.canControl !== true) return Promise.resolve({ presence: null, pending: 0 });
+    return Promise.resolve({
+      presence: {
+        user_id: USER,
+        device_id: "device-1",
+        a11y_connected: true,
+        remote_enabled: true,
+        foreground_package: "com.xingin.xhs",
+        last_seen: "2026-10-22T04:00:00.000Z",
+      },
+      pending: 0,
+    });
   }
 }

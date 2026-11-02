@@ -36,6 +36,7 @@ data class Settings(
     val enableUiText: Boolean = true,
     val enableTap: Boolean = true,
     val enableControl: Boolean = ControlPolicy.ENABLED_BY_DEFAULT,
+    val remoteAllowed: Boolean = ControlPolicy.REMOTE_ENABLED_BY_DEFAULT,
     val enableNotification: Boolean = true,
     val enableLocation: Boolean = true,
     val enableOcr: Boolean = true,
@@ -52,6 +53,9 @@ data class Settings(
     val lastCollectorError: String? = null,
 ) {
     val ocrPackages: Set<String> get() = parsePackageList(ocrPackagesRaw)
+
+    val enableRemote: Boolean
+        get() = ControlPolicy.remoteEnabled(remoteAllowed, enableControl)
 }
 
 class SettingsStore(context: Context) {
@@ -118,6 +122,7 @@ class SettingsStore(context: Context) {
     suspend fun setUiText(enabled: Boolean) = setFlag(Keys.UI_TEXT, enabled) { copy(enableUiText = enabled) }
     suspend fun setTap(enabled: Boolean) = setFlag(Keys.TAP, enabled) { copy(enableTap = enabled) }
     suspend fun setControlEnabled(enabled: Boolean) = setFlag(Keys.CONTROL, enabled) { copy(enableControl = enabled) }
+    suspend fun setRemoteEnabled(enabled: Boolean) = setFlag(Keys.REMOTE, enabled) { copy(remoteAllowed = enabled) }
     suspend fun setNotification(enabled: Boolean) = setFlag(Keys.NOTIFICATION, enabled) { copy(enableNotification = enabled) }
     suspend fun setLocationEnabled(enabled: Boolean) = setFlag(Keys.LOCATION, enabled) { copy(enableLocation = enabled) }
     suspend fun setOcrEnabled(enabled: Boolean) = setFlag(Keys.OCR, enabled) { copy(enableOcr = enabled) }
@@ -202,6 +207,7 @@ class SettingsStore(context: Context) {
             enableUiText = this[Keys.UI_TEXT] ?: true,
             enableTap = this[Keys.TAP] ?: true,
             enableControl = ControlPolicy.controlEnabled(this[Keys.CONTROL]),
+            remoteAllowed = this[Keys.REMOTE] ?: ControlPolicy.REMOTE_ENABLED_BY_DEFAULT,
             enableNotification = this[Keys.NOTIFICATION] ?: true,
             enableLocation = this[Keys.LOCATION] ?: true,
             enableOcr = this[Keys.OCR] ?: true,
@@ -230,6 +236,7 @@ class SettingsStore(context: Context) {
         val UI_TEXT = booleanPreferencesKey("enable_ui_text")
         val TAP = booleanPreferencesKey("enable_tap")
         val CONTROL = booleanPreferencesKey("enable_control")
+        val REMOTE = booleanPreferencesKey("enable_remote_control")
         val NOTIFICATION = booleanPreferencesKey("enable_notification")
         val LOCATION = booleanPreferencesKey("enable_location")
         val OCR = booleanPreferencesKey("enable_ocr")

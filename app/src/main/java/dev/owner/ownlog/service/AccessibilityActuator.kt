@@ -40,9 +40,101 @@ internal class AccessibilityActuator(
             ControlCommand.Home -> global(AccessibilityService.GLOBAL_ACTION_HOME, "已回到主页", "回到主页")
             ControlCommand.Recents -> global(AccessibilityService.GLOBAL_ACTION_RECENTS, "已打开最近任务", "打开最近任务")
             is ControlCommand.Swipe -> swipe(command.direction)
+            is ControlCommand.SwipePath -> {
+                val ok = dispatchStroke(command.x1, command.y1, command.x2, command.y2, command.durationMs)
+                if (ok) ControlResult.ok("已滑动") else ControlResult.refused(gestureRefused())
+            }
             is ControlCommand.TapText -> tap(command.text, byId = false)
             is ControlCommand.TapId -> tap(command.viewId, byId = true)
             is ControlCommand.SetText -> setText(command.text)
+            is ControlCommand.Wait -> {
+                kotlinx.coroutines.delay(command.millis)
+                ControlResult.ok("已等待")
+            }
+            ControlCommand.DumpUi -> ControlResult.ok("已读取界面")
+        }
+    }
+
+    suspend fun foregroundPackage(): String? = withContext(Dispatchers.Main) {
+        val roots = snapshotRoots()
+        try {
+            roots.nodes.firstOrNull()?.packageName?.toString()
+        } finally {
+            roots.close()
+        }
+    }
+
+    suspend fun describeUi(): dev.owner.ownlog.domain.UiTreeDump = withContext(Dispatchers.Main) {
+        val roots = snapshotRoots()
+        try {
+            val foreground = roots.nodes.firstOrNull()?.packageName?.toString()
+            val nodes = ArrayList<dev.owner.ownlog.domain.UiTreeNode>(64)
+            var visits = 0
+            for (root in roots.nodes) {
+                walkTree(root, 0, nodes) { visits++ }
+                if (nodes.size >= dev.owner.ownlog.domain.UiTreeText.MAX_NODES || visits >= MAX_VISITS) break
+            }
+            dev.owner.ownlog.domain.UiTreeText.format(foreground, nodes)
+        } finally {
+            roots.close()
+        }
+    }
+
+    private fun walkTree(
+        node: AccessibilityNodeInfo,
+        depth: Int,
+        out: MutableList<dev.owner.ownlog.domain.UiTreeNode>,
+        visit: () -> Int,
+    ) {
+        if (out.size >= dev.owner.ownlog.domain.UiTreeText.MAX_NODES || depth > 40 || visit() > MAX_VISITS) return
+        if (node.isVisibleToUser) {
+            val password = try {
+                typingBlocked(node)
+            } catch (_: Exception) {
+                false
+            }
+            val text = if (password) null else node.text?.toString()
+            val desc = if (password) null else node.contentDescription?.toString()
+            val viewId = node.viewIdResourceName
+            val clickable = node.isClickable || node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK }
+            if (password || clickable || !text.isNullOrBlank() || !desc.isNullOrBlank() || !viewId.isNullOrBlank()) {
+                val rect = Rect()
+                try {
+                    node.getBoundsInScreen(rect)
+                } catch (_: Exception) {
+                }
+                out.add(
+                    dev.owner.ownlog.domain.UiTreeNode(
+                        packageName = node.packageName?.toString(),
+                        text = text,
+                        contentDescription = desc,
+                        viewId = viewId,
+                        clickable = clickable,
+                        password = password,
+                        ownApp = node.packageName?.toString() == service.packageName,
+                        bounds = "${rect.left},${rect.top},${rect.right},${rect.bottom}",
+                        depth = depth,
+                    ),
+                )
+            }
+        }
+        val count = try {
+            node.childCount
+        } catch (_: Exception) {
+            0
+        }
+        for (index in 0 until count) {
+            if (out.size >= dev.owner.ownlog.domain.UiTreeText.MAX_NODES) return
+            val child = try {
+                node.getChild(index)
+            } catch (_: Exception) {
+                null
+            } ?: continue
+            try {
+                walkTree(child, depth + 1, out, visit)
+            } finally {
+                recycle(child)
+            }
         }
     }
 
@@ -362,5 +454,6 @@ internal class AccessibilityActuator(
         const val MAX_MATCHES = 40
         const val TAP_DURATION_MS = 60L
         const val GESTURE_TIMEOUT_MS = 2_500L
+        const val MAX_VISITS = 2_000
     }
 }

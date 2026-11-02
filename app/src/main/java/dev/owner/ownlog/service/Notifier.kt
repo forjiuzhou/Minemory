@@ -15,6 +15,7 @@ internal object Notifier {
     const val CHANNEL_ID = "ownlog-capture"
     const val LOCATION_ID = 42
     const val OCR_ID = 43
+    const val REMOTE_ID = 44
 
     fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT < 26) return
