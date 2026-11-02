@@ -10,6 +10,9 @@ import {
   type EventPatch,
   type EventQuery,
   type EventRow,
+  type PhoneCommandRow,
+  type PhoneEnqueue,
+  type PhonePresence,
   type SearchQuery,
   type Store,
 } from "../supabase/functions/ownlog-mcp/store.ts";
@@ -38,7 +41,7 @@ export class PostgresStore implements Store {
 
   async findToken(tokenHash: string): Promise<AgentToken | null> {
     const rows = await this.sql<TokenRow[]>`
-      select id, name, user_id, scopes, can_write
+      select id, name, user_id, scopes, can_write, can_control
       from public.agent_tokens
       where token_hash = ${tokenHash}
         and revoked_at is null
@@ -52,6 +55,7 @@ export class PostgresStore implements Store {
       user_id: row.user_id,
       scopes: row.scopes ?? [],
       can_write: row.can_write === true,
+      can_control: row.can_control === true,
     };
   }
 
@@ -155,6 +159,76 @@ export class PostgresStore implements Store {
     if (!safeRelativePath(path)) return null;
     return this.files.sign(path, expiresInSeconds);
   }
+
+  async enqueuePhoneCommand(input: PhoneEnqueue): Promise<PhoneCommandRow> {
+    const rows = await this.sql<Record<string, unknown>[]>`
+      insert into public.phone_commands (user_id, action, args, status, created_by_token_id, expires_at)
+      values (
+        ${input.userId}::uuid,
+        ${input.action},
+        ${this.sql.json(input.args as postgres.JSONValue)},
+        'pending',
+        ${input.tokenId}::uuid,
+        ${input.expiresAt}::timestamptz
+      )
+      returning id, user_id, device_id, action, args, status, result, created_at, started_at, finished_at, expires_at
+    `;
+    const row = rows[0];
+    if (!row) throw new Error("phone command was not created");
+    return phoneRow(row);
+  }
+
+  async getPhoneCommand(userId: string, id: string): Promise<PhoneCommandRow | null> {
+    const rows = await this.sql<Record<string, unknown>[]>`
+      select id, user_id, device_id, action, args, status, result, created_at, started_at, finished_at, expires_at
+      from public.phone_commands
+      where id = ${id}::uuid
+        and user_id = ${userId}::uuid
+      limit 1
+    `;
+    return rows[0] ? phoneRow(rows[0]) : null;
+  }
+
+  async settlePhoneCommand(
+    userId: string,
+    id: string,
+    fromStatus: string,
+    toStatus: "cancelled" | "failed",
+    result: Record<string, unknown>,
+    atIso: string,
+  ): Promise<PhoneCommandRow | null> {
+    const rows = await this.sql<Record<string, unknown>[]>`
+      update public.phone_commands
+      set status = ${toStatus},
+          result = ${this.sql.json(result as postgres.JSONValue)},
+          finished_at = ${atIso}::timestamptz
+      where id = ${id}::uuid
+        and user_id = ${userId}::uuid
+        and status = ${fromStatus}
+      returning id, user_id, device_id, action, args, status, result, created_at, started_at, finished_at, expires_at
+    `;
+    return rows[0] ? phoneRow(rows[0]) : null;
+  }
+
+  async phoneStatus(userId: string, nowIso: string): Promise<{ presence: PhonePresence | null; pending: number }> {
+    const presence = await this.sql<Record<string, unknown>[]>`
+      select user_id, device_id, a11y_connected, remote_enabled, foreground_package, last_seen
+      from public.phone_presence
+      where user_id = ${userId}::uuid
+      limit 1
+    `;
+    const pending = await this.sql<{ count: number }[]>`
+      select count(*)::int as count
+      from public.phone_commands
+      where user_id = ${userId}::uuid
+        and status = 'pending'
+        and expires_at > ${nowIso}::timestamptz
+    `;
+    return {
+      presence: presence[0] ? presenceRow(presence[0]) : null,
+      pending: pending[0]?.count ?? 0,
+    };
+  }
 }
 
 type TokenRow = {
@@ -163,6 +237,7 @@ type TokenRow = {
   user_id: string;
   scopes: string[] | null;
   can_write: boolean | null;
+  can_control: boolean | null;
 };
 
 function iso(value: unknown): string | null {
@@ -192,5 +267,37 @@ function normalizeRow(row: Record<string, unknown>): EventRow {
     device_id: row.device_id == null ? null : String(row.device_id),
     created_at: iso(row.created_at),
     user_id: row.user_id == null ? undefined : String(row.user_id),
+  };
+}
+
+function asObject(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function phoneRow(row: Record<string, unknown>): PhoneCommandRow {
+  return {
+    id: String(row.id),
+    user_id: String(row.user_id),
+    device_id: row.device_id == null ? null : String(row.device_id),
+    action: String(row.action ?? ""),
+    args: asObject(row.args) ?? {},
+    status: String(row.status ?? ""),
+    result: asObject(row.result),
+    created_at: iso(row.created_at) ?? "",
+    started_at: iso(row.started_at),
+    finished_at: iso(row.finished_at),
+    expires_at: iso(row.expires_at) ?? "",
+  };
+}
+
+function presenceRow(row: Record<string, unknown>): PhonePresence {
+  return {
+    user_id: String(row.user_id),
+    device_id: row.device_id == null ? null : String(row.device_id),
+    a11y_connected: row.a11y_connected === true,
+    remote_enabled: row.remote_enabled === true,
+    foreground_package: row.foreground_package == null ? null : String(row.foreground_package),
+    last_seen: iso(row.last_seen) ?? "",
   };
 }

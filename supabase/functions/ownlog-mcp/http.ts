@@ -5,8 +5,9 @@ import { McpServer } from "npm:@modelcontextprotocol/sdk@1.30.0/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "npm:@modelcontextprotocol/sdk@1.30.0/server/webStandardStreamableHttp.js";
 
 import { parseBearer, sha256Hex } from "./auth.ts";
+import { redactLoggedArgs } from "./phone.ts";
 import { shrinkArgs } from "./pure.ts";
-import type { Store } from "./store.ts";
+import type { AgentToken, Store } from "./store.ts";
 import { TOOLS } from "./tools.ts";
 
 const CORS: Record<string, string> = {
@@ -65,7 +66,7 @@ export function createHandler(store: Store, options: HandlerOptions = {}) {
 async function dispatchMcp(
   req: Request,
   store: Store,
-  token: { id: string; user_id: string; scopes: string[]; can_write: boolean; name: string },
+  token: AgentToken,
   now: () => Date,
 ): Promise<Response> {
   const server = new McpServer({ name: "ownlog", version: "1.0.0" });
@@ -76,7 +77,7 @@ async function dispatchMcp(
       inputSchema: tool.inputSchema,
       annotations: tool.annotations,
     }, async (args: Record<string, unknown>) => {
-      const loggedArgs = shrinkArgs(args);
+      const loggedArgs = redactLoggedArgs(tool.name, shrinkArgs(args));
       try {
         const result = await tool.call(args, { token, store, now: now() });
         await store.logAccess({

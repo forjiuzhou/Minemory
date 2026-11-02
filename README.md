@@ -20,9 +20,11 @@
 
 深度模式默认开。新安装，以及从来没手动关过它的旧安装，都会记 `ui_text`、`tap` 和 `screen_ocr`。第一次打开会带你打开无障碍并授权截屏。截屏授权在重启后会失效，通知栏有一条常驻提醒，点「重新授权」即可。首页也会出现同样的入口。
 
+允许操作手机也默认开，和采集是两件事。关掉它之后，使用、通知、位置、收件箱、界面文字和点击都还在，只是不再替你点屏幕。见 [操作手机](#操作手机)。
+
 自记自己的界面不记。没有应用黑名单。1.5 秒内的进出闪一下会被收成同一次会话。
 
-代理查询见 [docs/agent-queries.md](docs/agent-queries.md)。远程 MCP 见 [docs/mcp.md](docs/mcp.md)，自建见 [docs/self-host.md](docs/self-host.md)。
+代理查询见 [docs/agent-queries.md](docs/agent-queries.md)。远程 MCP 见 [docs/mcp.md](docs/mcp.md)，自建见 [docs/self-host.md](docs/self-host.md)。本机控机和远程控机见 [docs/control.md](docs/control.md)。只有 `can_control` 的 `olk_` 令牌可以操作手机。
 
 ## 构建
 
@@ -83,7 +85,7 @@ SUPABASE_ANON_KEY=sb_publishable_... 或旧的 anon key（eyJ...）
 
 1. 允许通知，这样重启后才能看到重新授权的提醒。
 2. Android 13 及以上：设置 → 应用 → 自记 → 右上角 ⋮ → **允许受限设置**。
-3. 设置 → 无障碍 → 已安装的应用 → 自记 → 打开。它只读窗口，不会替你点屏幕。
+3. 设置 → 无障碍 → 已安装的应用 → 自记 → 打开。同一个服务既读窗口，也在「允许操作手机」开着时可以点击、滑动和返回。这个开关默认开，可以关掉。升级后如果滑动没反应，把无障碍里的自记关掉再打开一次。
 4. 授权截屏，选整个屏幕。系统会显示正在录屏的标志。
 
 授权在重启后失效。自记会留一条不能划掉的通知，动作是「重新授权」。打开应用时，首页也会提示。
@@ -96,6 +98,36 @@ SUPABASE_ANON_KEY=sb_publishable_... 或旧的 anon key（eyJ...）
 
 默认 OCR 包名：`com.ss.android.ugc.aweme`、`com.ss.android.ugc.aweme.lite`、`com.xingin.xhs`、`com.tencent.mm`。一行一个，可以改。从没改过名单的旧安装会自动加上微信。
 
+## 操作手机
+
+采集仍然是这件事的主体。控机是加上去的，走已经开着的无障碍，不另要权限。
+
+设置 → **操作** → **允许操作手机**。新安装默认开。已经装过、从没写过这个开关的，也是开。关掉之后按钮和本机 Binder 都会拒绝，采集不关。
+
+设置里点「试试操作」，或者首页进设置后再进这一页。可以点系统返回、主页、最近任务、四个方向的滑动，也可以写一行命令：
+
+```text
+tap 搜索
+tap id com.android.settings:id/search
+back
+home
+recents
+swipe up
+type 你好
+```
+
+`tap` 按可见文字点（也认内容说明）。多个相同文字时，点当前应用窗口里更像按钮的那一个。`tap id` 要用完整的 `包名:id/名字`。`type` / `输入` 只写当前焦点上的可编辑控件。点击、输入和滑动会先把自记退到后台，再对当时的前台执行。
+
+做不到的事：
+
+- 不往密码框里写。节点自己或它的直接父节点标了 `isPassword`，或是密码类 `inputType`，就拒绝，不会改去写旁边的框。Android 13 以下读不到 `inputType`，只能看 `isPassword`。没标明的密码框拦不住，和采集是同一条限制。
+- 不点自记自己的控件，也不往自记自己的输入框里写。
+- 不把控机命令另记成一条事件。写进别人那个非密码输入框里的字，深度模式仍可能按原来的 `ui_text` 记下。那是采集，不是把命令再存一份。
+
+本机给以后的伴侣进程留了一个不导出的 Binder：`dev.owner.ownlog.service.ControlBinderService`。没有 intent-filter，不监听端口。只有同一个 UID 能 bind。协议写在 [docs/control.md](docs/control.md)。
+
+远程控机不走 Binder。代理调用 MCP 的 `phone_*`（令牌要 `can_control`），手机用登录用户的 access token 领取 `phone_commands` 并执行。设置里还有「允许远程控制」，默认开，但本机「允许操作手机」关着时不会执行。密码框仍然拒绝写入。详情在 [docs/control.md](docs/control.md) 和 [docs/mcp.md](docs/mcp.md)。
+
 ## 配置 Supabase
 
 1. 新建一个项目。
@@ -103,6 +135,8 @@ SUPABASE_ANON_KEY=sb_publishable_... 或旧的 anon key（eyJ...）
    1. [supabase/migrations/20261022000000_events.sql](supabase/migrations/20261022000000_events.sql)
    2. [supabase/migrations/20261022160000_inbox.sql](supabase/migrations/20261022160000_inbox.sql)
    3. [supabase/migrations/20261022180000_owner_auth.sql](supabase/migrations/20261022180000_owner_auth.sql)
+   4. [supabase/migrations/20261022200000_agent_mcp.sql](supabase/migrations/20261022200000_agent_mcp.sql)
+   5. [supabase/migrations/20261102180000_phone_control.sql](supabase/migrations/20261102180000_phone_control.sql)
 3. 打开 **Authentication → Providers**，确认 Email 可用，并**关掉公开注册**（Disable signups）。不要让别人用这个网址自己开账号。
 4. 打开 **Authentication → Users**，点 Add user，填你自己的邮箱和密码，创建这个账号。应用不会替你注册。
 5. 打开 Connect，复制 Project URL，以及 publishable key（`sb_publishable_...`）。旧项目的 anon public key（`eyJ...`）也可以。

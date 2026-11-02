@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">自记</string>
-    <string name="accessibility_description">自记的深度模式会读取你正在使用的窗口文字和点击，记到你自己的数据库。密码框里的内容不会读取。名单里的应用在点击或滑动停稳后会截屏识别。深度模式默认开启。这是你本人安装在自己手机上的记录工具。</string>
+    <string name="accessibility_description">自记读取你正在使用的窗口文字和点击，记到你自己的数据库。密码框里的内容不会读取，也不会写入。允许操作手机默认开着，可以点击、滑动、返回，以及往普通输入框里写字；在自记的设置里关掉之后，这里只观察。这是你本人安装在自己手机上的工具。</string>
     <string name="share_target">记到自记</string>
 </resources>

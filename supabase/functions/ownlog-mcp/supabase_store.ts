@@ -8,6 +8,9 @@ import {
   type EventPatch,
   type EventQuery,
   type EventRow,
+  type PhoneCommandRow,
+  type PhoneEnqueue,
+  type PhonePresence,
   type SearchQuery,
   type Store,
 } from "./store.ts";
@@ -18,6 +21,7 @@ type TokenRow = {
   user_id: string;
   scopes: string[] | null;
   can_write: boolean | null;
+  can_control: boolean | null;
 };
 
 export class SupabaseStore implements Store {
@@ -50,7 +54,7 @@ export class SupabaseStore implements Store {
 
   async findToken(tokenHash: string): Promise<AgentToken | null> {
     const query = new URLSearchParams({
-      select: "id,name,user_id,scopes,can_write",
+      select: "id,name,user_id,scopes,can_write,can_control",
       token_hash: `eq.${tokenHash}`,
       revoked_at: "is.null",
       limit: "1",
@@ -67,6 +71,7 @@ export class SupabaseStore implements Store {
       user_id: row.user_id,
       scopes: row.scopes ?? [],
       can_write: row.can_write === true,
+      can_control: row.can_control === true,
     };
   }
 
@@ -178,4 +183,122 @@ export class SupabaseStore implements Store {
     if (signed.startsWith("/storage/v1")) return `${this.base}${signed}`;
     return `${this.base}/storage/v1${signed}`;
   }
+
+  async enqueuePhoneCommand(input: PhoneEnqueue): Promise<PhoneCommandRow> {
+    const response = await this.send("/rest/v1/phone_commands", {
+      method: "POST",
+      headers: this.headers({ prefer: "return=representation" }),
+      body: JSON.stringify({
+        user_id: input.userId,
+        action: input.action,
+        args: input.args,
+        status: "pending",
+        created_by_token_id: input.tokenId,
+        expires_at: input.expiresAt,
+      }),
+    });
+    const rows = await response.json() as Record<string, unknown>[];
+    const row = rows[0];
+    if (!row) throw new Error("phone command was not created");
+    return phoneRow(row);
+  }
+
+  async getPhoneCommand(userId: string, id: string): Promise<PhoneCommandRow | null> {
+    const query = new URLSearchParams({
+      select: PHONE_COLUMNS,
+      id: `eq.${id}`,
+      user_id: `eq.${userId}`,
+      limit: "1",
+    });
+    const response = await this.send(`/rest/v1/phone_commands?${query}`, { headers: this.headers() });
+    const rows = await response.json() as Record<string, unknown>[];
+    return rows[0] ? phoneRow(rows[0]) : null;
+  }
+
+  async settlePhoneCommand(
+    userId: string,
+    id: string,
+    fromStatus: string,
+    toStatus: "cancelled" | "failed",
+    result: Record<string, unknown>,
+    atIso: string,
+  ): Promise<PhoneCommandRow | null> {
+    const query = new URLSearchParams({
+      id: `eq.${id}`,
+      user_id: `eq.${userId}`,
+      status: `eq.${fromStatus}`,
+      select: PHONE_COLUMNS,
+    });
+    const response = await this.send(`/rest/v1/phone_commands?${query}`, {
+      method: "PATCH",
+      headers: this.headers({ prefer: "return=representation" }),
+      body: JSON.stringify({ status: toStatus, result, finished_at: atIso }),
+    });
+    const rows = await response.json() as Record<string, unknown>[];
+    return rows[0] ? phoneRow(rows[0]) : null;
+  }
+
+  async phoneStatus(userId: string, nowIso: string): Promise<{ presence: PhonePresence | null; pending: number }> {
+    const presenceQuery = new URLSearchParams({
+      select: "user_id,device_id,a11y_connected,remote_enabled,foreground_package,last_seen",
+      user_id: `eq.${userId}`,
+      limit: "1",
+    });
+    const pendingQuery = new URLSearchParams({
+      select: "id",
+      user_id: `eq.${userId}`,
+      status: "eq.pending",
+      expires_at: `gt.${nowIso}`,
+      limit: "100",
+    });
+    const [presenceResponse, pendingResponse] = await Promise.all([
+      this.send(`/rest/v1/phone_presence?${presenceQuery}`, { headers: this.headers() }),
+      this.send(`/rest/v1/phone_commands?${pendingQuery}`, { headers: this.headers() }),
+    ]);
+    const presenceRows = await presenceResponse.json() as Record<string, unknown>[];
+    const pendingRows = await pendingResponse.json() as unknown[];
+    return {
+      presence: presenceRows[0] ? presenceRow(presenceRows[0]) : null,
+      pending: Array.isArray(pendingRows) ? pendingRows.length : 0,
+    };
+  }
+}
+
+const PHONE_COLUMNS = "id,user_id,device_id,action,args,status,result,created_at,started_at,finished_at,expires_at";
+
+function asObject(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function textOrNull(value: unknown): string | null {
+  if (value == null) return null;
+  return String(value);
+}
+
+function phoneRow(row: Record<string, unknown>): PhoneCommandRow {
+  return {
+    id: String(row.id),
+    user_id: String(row.user_id),
+    device_id: textOrNull(row.device_id),
+    action: String(row.action ?? ""),
+    args: asObject(row.args) ?? {},
+    status: String(row.status ?? ""),
+    result: asObject(row.result),
+    created_at: textOrNull(row.created_at) ?? "",
+    started_at: textOrNull(row.started_at),
+    finished_at: textOrNull(row.finished_at),
+    expires_at: textOrNull(row.expires_at) ?? "",
+  };
+}
+
+function presenceRow(row: Record<string, unknown>): PhonePresence {
+  return {
+    user_id: String(row.user_id),
+    device_id: textOrNull(row.device_id),
+    a11y_connected: row.a11y_connected === true,
+    remote_enabled: row.remote_enabled === true,
+    foreground_package: textOrNull(row.foreground_package),
+    last_seen: textOrNull(row.last_seen) ?? "",
+  };
 }

@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.owner.ownlog.service.CaptureBridge
 import dev.owner.ownlog.service.CaptureReminder
+import dev.owner.ownlog.ui.ControlScreen
 import dev.owner.ownlog.ui.InboxScreen
 import dev.owner.ownlog.ui.OnboardingScreen
 import dev.owner.ownlog.ui.OwnLogTheme
@@ -38,6 +39,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        consumeMoveBack(intent)
         if (savedInstanceState == null && intent.getBooleanExtra(EXTRA_GRANT_CAPTURE, false)) {
             grantRequests.value = 1
         }
@@ -75,6 +77,7 @@ class MainActivity : ComponentActivity() {
             OwnLogTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     var settingsOpen by rememberSaveable { mutableStateOf(openSettings) }
+                    var controlOpen by rememberSaveable { mutableStateOf(false) }
                     val showOnboarding = settings.deepMode && !settings.onboardingDone
                     when {
                         showOnboarding -> OnboardingScreen(
@@ -86,7 +89,11 @@ class MainActivity : ComponentActivity() {
                                 }
                             },
                         )
-                        settingsOpen -> SettingsScreen(onBack = { settingsOpen = false })
+                        controlOpen -> ControlScreen(onBack = { controlOpen = false })
+                        settingsOpen -> SettingsScreen(
+                            onBack = { settingsOpen = false },
+                            onOpenControl = { controlOpen = true },
+                        )
                         else -> InboxScreen(
                             onOpenSettings = { settingsOpen = true },
                             onRequestProjection = { projectionLauncher.launch(screenCaptureIntent(context)) },
@@ -100,6 +107,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        consumeMoveBack(intent)
         if (intent.getBooleanExtra(EXTRA_GRANT_CAPTURE, false)) {
             grantRequests.value = grantRequests.value + 1
         }
@@ -108,5 +116,12 @@ class MainActivity : ComponentActivity() {
     companion object {
         const val EXTRA_SETTINGS = "open_settings"
         const val EXTRA_GRANT_CAPTURE = "grant_capture"
+        const val EXTRA_MOVE_BACK = "move_back"
+    }
+
+    private fun consumeMoveBack(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_MOVE_BACK, false) != true) return
+        intent.removeExtra(EXTRA_MOVE_BACK)
+        moveTaskToBack(true)
     }
 }

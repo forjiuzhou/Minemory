@@ -11,11 +11,11 @@
 - Caddy，或其他能做 HTTPS 的反向代理
 - 若要给 `get_event` 签文件地址：本机目录，或一套 S3 兼容的钥匙
 
-手机应用仍然把事件写进 Supabase。这份服务只读（`annotate` 在令牌允许时会改标签、摘要和 `organized_at`）。它不会替代手机的上传。
+手机应用仍然把事件写进 Supabase，并用同一个登录会话领取 `phone_commands`。这份服务在令牌允许时可以改标签，也可以把控机命令插进同一张表。它不会替代手机的上传，也不持有手机。手机没开远程控制时，`phone_*` 只会告诉你不在线。
 
 ## 数据库
 
-迁移文件是 `supabase/migrations/20261022200000_agent_mcp.sql`，以及它之前的自记迁移。在 Supabase 上用 SQL Editor 或 `supabase db push` 执行即可。
+迁移文件包括 `supabase/migrations/20261022200000_agent_mcp.sql`、`supabase/migrations/20261102180000_phone_control.sql`，以及它们之前的自记迁移。在 Supabase 上用 SQL Editor 或 `supabase db push` 执行即可。控机表必须和手机登录的是同一个库。
 
 VPS 若直接连 Supabase 的 Postgres，用 Dashboard → Database 里的连接串，端口 5432 的直连即可。事务池（6543）也能用，进程看到池化地址时会关掉 prepared statements。连接串放进环境变量 `DATABASE_URL`，不要写进仓库。
 
@@ -27,6 +27,8 @@ DATABASE_URL=postgresql://postgres.<ref>:<password>@db.<ref>.supabase.co:5432/po
 
 ```sql
 select public.create_agent_token('vps', '<user uuid>');
+-- 允许这只令牌操作手机：
+select public.create_agent_token('vps-phone', '<user uuid>', '{*}', false, true);
 ```
 
 撤销：
