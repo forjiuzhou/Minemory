@@ -7,6 +7,8 @@ import dev.owner.ownlog.data.Settings
 import dev.owner.ownlog.data.SettingsStore
 import dev.owner.ownlog.domain.ClickSnap
 import dev.owner.ownlog.domain.ConsolidatedUi
+import dev.owner.ownlog.domain.Engagement
+import dev.owner.ownlog.domain.EngagementDedupe
 import dev.owner.ownlog.domain.FeedCoalescer
 import dev.owner.ownlog.domain.FeedScreen
 import dev.owner.ownlog.domain.GeoFix
@@ -66,6 +68,10 @@ internal class EventPipeline(
     private var pendingInteractionPkg: String? = null
     private var pendingInteractionAt: Long = 0L
     private var lastFix: GeoFix? = null
+    private var lastScreenPackage: String = ""
+    private var lastScreenTitle: String? = null
+    private var lastScreenNodes: List<TextNode> = emptyList()
+    private val engagementDedupe = EngagementDedupe()
 
     init {
         scope.launch {
@@ -86,6 +92,9 @@ internal class EventPipeline(
             interactionJob = null
             pendingInteractionPkg = null
             foregroundPkg = ""
+            lastScreenPackage = ""
+            lastScreenTitle = null
+            lastScreenNodes = emptyList()
         }
     }
 
@@ -108,6 +117,9 @@ internal class EventPipeline(
         scope.launch {
             val settings = settingsStore.get()
             if (packageName == app.packageName) return@launch
+            lastScreenPackage = packageName
+            if (!windowTitle.isNullOrBlank()) lastScreenTitle = windowTitle
+            lastScreenNodes = nodes
             if (stateChange) {
                 screenChangedAt = now
                 foregroundPkg = packageName
@@ -157,25 +169,31 @@ internal class EventPipeline(
     fun onClick(packageName: String, snap: ClickSnap, now: Long) {
         scope.launch {
             val settings = settingsStore.get()
-            if (!settings.deepMode || !settings.enableTap || packageName == app.packageName) return@launch
-            val decision = decideClick(snap)
-            if (!decision.record) return@launch
-            val extras = JsonObj()
-                .str("view_id", snap.viewId)
-                .str("class_name", snap.className)
-                .bool("password_skipped", decision.passwordSkipped)
-                .build()
-            repo.record(
-                type = "tap",
-                occurredAt = now,
-                packageName = packageName,
-                appLabel = AppLabels.label(app, packageName),
-                title = if (decision.passwordSkipped) "密码框" else decision.content?.take(80),
-                content = decision.content,
-                extrasJson = extras,
-                deviceId = settings.deviceId,
-            )
-            Log.i(TAG, "record type=tap pkg=$packageName password=${decision.passwordSkipped}")
+            if (!settings.deepMode || packageName == app.packageName) return@launch
+            if (settings.enableTap) {
+                val decision = decideClick(snap)
+                if (decision.record) {
+                    val extras = JsonObj()
+                        .str("view_id", snap.viewId)
+                        .str("class_name", snap.className)
+                        .bool("password_skipped", decision.passwordSkipped)
+                        .build()
+                    repo.record(
+                        type = "tap",
+                        occurredAt = now,
+                        packageName = packageName,
+                        appLabel = AppLabels.label(app, packageName),
+                        title = if (decision.passwordSkipped) "密码框" else decision.content?.take(80),
+                        content = decision.content,
+                        extrasJson = extras,
+                        deviceId = settings.deviceId,
+                    )
+                    Log.i(TAG, "record type=tap pkg=$packageName password=${decision.passwordSkipped}")
+                }
+            }
+            if (settings.enableEngagement) {
+                recordEngagement(packageName, snap, settings, now)
+            }
         }
     }
 
@@ -237,6 +255,28 @@ internal class EventPipeline(
             )
             Log.i(TAG, "record type=location")
         }
+    }
+
+    private suspend fun recordEngagement(packageName: String, snap: ClickSnap, settings: Settings, now: Long) {
+        val sameScreen = lastScreenPackage == packageName
+        val hit = Engagement.detect(
+            packageName = packageName,
+            snap = snap,
+            windowTitle = if (sameScreen) lastScreenTitle else null,
+            nodes = if (sameScreen) lastScreenNodes else emptyList(),
+        ) ?: return
+        if (!engagementDedupe.shouldRecord(packageName, hit.action, Engagement.dedupeTarget(hit), now)) return
+        repo.record(
+            type = Engagement.TYPE,
+            occurredAt = now,
+            packageName = packageName,
+            appLabel = AppLabels.label(app, packageName),
+            title = hit.title,
+            content = hit.content,
+            extrasJson = Engagement.extrasJson(hit),
+            deviceId = settings.deviceId,
+        )
+        Log.i(TAG, "record type=engagement pkg=$packageName action=${hit.action}")
     }
 
     private suspend fun handleForeground(packageName: String, windowTitle: String?, now: Long) {
