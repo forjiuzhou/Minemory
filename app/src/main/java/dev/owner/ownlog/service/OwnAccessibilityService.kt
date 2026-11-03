@@ -243,21 +243,37 @@ class OwnAccessibilityService : AccessibilityService() {
         if (text.isNullOrBlank() && desc.isNullOrBlank()) {
             text = firstChildText(source)
         }
-        if (text.isNullOrBlank() && desc.isNullOrBlank()) {
-            val parent = source.parent
-            if (parent != null) {
-                try {
-                    val parentType = if (Build.VERSION.SDK_INT >= 33) parent.inputType else 0
-                    if (!PasswordSignals.isPassword(parent.isPassword, parentType)) {
-                        text = parent.text?.toString()
-                        desc = parent.contentDescription?.toString()
+        var parentViewId: String? = null
+        var parentText: String? = null
+        var parentDesc: String? = null
+        val parent = source.parent
+        if (parent != null) {
+            try {
+                val parentType = if (Build.VERSION.SDK_INT >= 33) parent.inputType else 0
+                if (!PasswordSignals.isPassword(parent.isPassword, parentType)) {
+                    parentViewId = parent.viewIdResourceName
+                    parentText = parent.text?.toString()
+                    parentDesc = parent.contentDescription?.toString()
+                    if (text.isNullOrBlank() && desc.isNullOrBlank()) {
+                        text = parentText
+                        desc = parentDesc
                     }
-                } finally {
-                    parent.recycle()
                 }
+            } finally {
+                parent.recycle()
             }
         }
-        return ClickSnap(text, desc, source.viewIdResourceName, source.className?.toString(), false, inputType)
+        return ClickSnap(
+            text,
+            desc,
+            source.viewIdResourceName,
+            source.className?.toString(),
+            false,
+            inputType,
+            parentViewId,
+            parentText,
+            parentDesc,
+        )
     }
 
     private fun firstChildText(node: AccessibilityNodeInfo): String? {

@@ -52,7 +52,7 @@ const toField = z.string().optional().describe(
   "终点，ISO 8601（不含该瞬间），或 YYYY-MM-DD（含当天，直到当地次日 0 点）。",
 );
 const typesField = z.array(z.string()).optional().describe(
-  "事件类型，例如 note、share、ui_text、screen_ocr、app_fg、location。不填则用令牌允许的全部类型。",
+  "事件类型，例如 note、share、engagement、ui_text、screen_ocr、app_fg、location。engagement 是赞、收藏、评论、转发，动作在 extras.action（like、favorite、comment、share）。不填则用令牌允许的全部类型。",
 );
 
 type AnyArgs = Record<string, unknown>;

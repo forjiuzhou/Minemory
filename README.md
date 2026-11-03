@@ -94,6 +94,36 @@ SUPABASE_ANON_KEY=sb_publishable_... 或旧的 anon key（eyJ...）
 
 小红书笔记详情和微信视频号会收成一条 `ui_text`：标题、作者、正文各一行，`extras.screen_hint` 为 `xhs_note` 或 `wechat_channels`。微信聊天仍按普通界面文字记。
 
+### 互动（赞、收藏、评论、转发）
+
+设置 → 深度模式里的 **互动**，默认开。无障碍看到赞、收藏、评论、分享或转发的点击时，另记一条 `type = 'engagement'`，和原来的 `tap` 并存。关掉「点击」不会关掉互动。
+
+已知包名会认 view id（小红书 `com.xingin.xhs`、抖音 `com.ss.android.ugc.aweme` 和极速版、微信 `com.tencent.mm`、哔哩哔哩 `tv.danmaku.bili`）。对不上时，用按钮上的短文字或 contentDescription（赞 / 喜欢 / 收藏 / 评论 / 转发 / 分享，以及 like / favorite / bookmark / comment / share）。同一条内容、同一个动作在 1 秒内的重复事件丢掉。
+
+`extras.action` 是 `like`、`favorite`、`comment` 或 `share`。标题和作者尽量取当前屏幕上已经读到的笔记或视频，不把整屏贴进去。查询见 [docs/agent-queries.md](docs/agent-queries.md)。MCP 的 `search` / `timeline` 把 `types` 设为 `["engagement"]` 即可，`extras` 会一起返回。
+
+手机上确认：装上调试包，深度模式、互动、无障碍都开着。打开小红书，点开一条笔记，点赞。设置页「最近记录」会出现一行「互动」。上传成功后：
+
+```sql
+select occurred_at, package_name, title, content,
+       extras->>'action' as action,
+       extras->>'author' as author,
+       extras->>'url' as url
+from events
+where type = 'engagement'
+order by occurred_at desc
+limit 20;
+```
+
+做不到的事：
+
+- 分享出去的链接，只有已经写在屏幕上时才会进 `extras.url`。系统分享单里的目标地址，无障碍看不到。要留链接，仍用分享菜单里的「记到自记」（那是 `share`，不是这里的转发点击）。
+- 纯图标、没有 contentDescription、view id 也对不上已知词的按钮，记不下来。抖音双击画面点赞经常没有「赞」的无障碍节点，这种会漏。
+- 标题和作者来自最近一次无障碍快照（大约晚 0.6 秒）。只画在画面上、树里没有的字，不会写进行动记录；那些字仍可能在 `screen_ocr`。
+- 微信等私聊里只记动作和窗口标题（通常是对方名字），不记消息正文，也不从聊天记录里抠链接。`extras.private_context` 为 true。
+- 密码框维持原样：不记文字，也不当成互动。
+- 关注、投币不记。底栏如果类名或 view id 不像 Tab，而文字恰好是「收藏」「评论」，仍可能记成一次互动。
+
 默认 OCR 包名：`com.ss.android.ugc.aweme`、`com.ss.android.ugc.aweme.lite`、`com.xingin.xhs`、`com.tencent.mm`。一行一个，可以改。从没改过名单的旧安装会自动加上微信。
 
 ## 配置 Supabase
@@ -103,6 +133,7 @@ SUPABASE_ANON_KEY=sb_publishable_... 或旧的 anon key（eyJ...）
    1. [supabase/migrations/20261022000000_events.sql](supabase/migrations/20261022000000_events.sql)
    2. [supabase/migrations/20261022160000_inbox.sql](supabase/migrations/20261022160000_inbox.sql)
    3. [supabase/migrations/20261022180000_owner_auth.sql](supabase/migrations/20261022180000_owner_auth.sql)
+   4. [supabase/migrations/20261103140000_engagement.sql](supabase/migrations/20261103140000_engagement.sql)（已有项目补跑这一份即可。不跑的话，互动记录上传会被拒绝并放弃这一行，其它类型照常传）
 3. 打开 **Authentication → Providers**，确认 Email 可用，并**关掉公开注册**（Disable signups）。不要让别人用这个网址自己开账号。
 4. 打开 **Authentication → Users**，点 Add user，填你自己的邮箱和密码，创建这个账号。应用不会替你注册。
 5. 打开 Connect，复制 Project URL，以及 publishable key（`sb_publishable_...`）。旧项目的 anon public key（`eyJ...`）也可以。

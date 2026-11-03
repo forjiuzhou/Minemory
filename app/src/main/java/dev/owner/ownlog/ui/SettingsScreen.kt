@@ -480,6 +480,9 @@ internal fun SettingsScreen(onBack: (() -> Unit)? = null) {
                     ToggleRow("点击", "控件上的文字或说明，不记坐标", settings.enableTap) {
                         scope.launch { app.settings.setTap(it) }
                     }
+                    ToggleRow("互动", "记下赞、收藏、评论和转发，方便以后跨应用查找", settings.enableEngagement) {
+                        scope.launch { app.settings.setEngagement(it) }
+                    }
                     ToggleRow("截屏 OCR", "抖音、微信视频号、小红书，或几秒内没有可读文字时", settings.enableOcr) { enabled ->
                         scope.launch {
                             app.settings.setOcrEnabled(enabled)
@@ -672,6 +675,7 @@ private fun typeLabel(type: String): String = when (type) {
     "app_bg" -> "离开"
     "ui_text" -> "界面"
     "tap" -> "点击"
+    "engagement" -> "互动"
     "notification" -> "通知"
     "screen_ocr" -> "识别"
     "location" -> "位置"

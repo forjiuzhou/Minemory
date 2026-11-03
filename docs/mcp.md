@@ -101,7 +101,7 @@ Content-Type: application/json
 
 | 工具 | 作用 |
 | --- | --- |
-| `search` | 按标题和正文搜索。`query`，可选 `types`、`from`、`to`、`app`（包名或应用名）、`limit`（默认 20，最多 50）、`tz` |
+| `search` | 按标题和正文搜索。`query`，可选 `types`、`from`、`to`、`app`（包名或应用名）、`limit`（默认 20，最多 50）、`tz`。赞、收藏、评论、转发是 `engagement`，`extras.action` 为 `like` / `favorite` / `comment` / `share` |
 | `timeline` | 一段时间的正序事件。`date` 或 `from`/`to`，可选 `types`、`limit`（默认 80，最多 200）、`tz`。连续且正文相同的 `ui_text` 收成一条，`collapsed_count` 是条数 |
 | `get_event` | 按 uuid 读完整一行。`extras.file_path` 若指向 inbox，附带 1 小时的 `file_url` |
 | `app_usage` | 按应用汇总时长和会话数。用 `app_bg.extras.duration_ms`，没有时长时按 `session_id` 把 `app_fg` / `app_bg` 配成一对 |

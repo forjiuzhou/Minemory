@@ -122,6 +122,45 @@ group by 1, 2
 order by last_seen desc;
 ```
 
+## 赞过、收藏过、评论过、转发过
+
+类型是 `engagement`。手机在深度模式里记下按钮，不记整段私聊，也不记密码框。`extras.action` 是 `like`（赞 / 喜欢）、`favorite`（收藏）、`comment`（评论）、`share`（分享或转发）。作者在 `extras.author`，屏幕上能看见的链接在 `extras.url`。没有弹出分享面板、或者链接只在系统分享单里时，`url` 是空的。私聊里只留动作和窗口标题（通常是对方名字），`extras.private_context` 为 true，正文不是消息内容。
+
+先确认已经跑过 [supabase/migrations/20261103140000_engagement.sql](../supabase/migrations/20261103140000_engagement.sql)。否则 `type = 'engagement'` 插不进去。
+
+```sql
+select
+    occurred_at,
+    package_name,
+    app_label,
+    extras->>'action' as action,
+    extras->>'action_label' as action_label,
+    title,
+    extras->>'author' as author,
+    extras->>'url' as url,
+    left(content, 240) as content
+from events
+where type = 'engagement'
+  and occurred_at > now() - interval '14 days'
+order by occurred_at desc
+limit 100;
+```
+
+只要某一类，例如收藏：
+
+```sql
+select occurred_at, package_name, app_label, title, extras->>'author' as author, extras->>'url' as url
+from events
+where type = 'engagement'
+  and extras->>'action' = 'favorite'
+  and occurred_at > now() - interval '30 days'
+order by occurred_at desc;
+```
+
+小红书、抖音、微信、哔哩哔哩的包名分别是 `com.xingin.xhs`、`com.ss.android.ugc.aweme`（极速版 `com.ss.android.ugc.aweme.lite`）、`com.tencent.mm`、`tv.danmaku.bili`。
+
+MCP 不用新工具。`search` 或 `timeline` 把 `types` 设为 `["engagement"]`。令牌范围是 `{*}` 时本来就能读到。搜索打在标题和正文上（正文开头是「赞」「收藏」「评论」「分享」或「转发」），按动作过滤用上面的 SQL，或在返回的 `extras.action` 上筛。
+
 ## 某次点击点了什么
 
 不记坐标。密码框只有 `title = '密码框'`，`extras.password_skipped = true`，没有密码文本。

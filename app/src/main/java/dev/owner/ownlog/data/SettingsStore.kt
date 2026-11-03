@@ -34,6 +34,7 @@ data class Settings(
     val enableUsage: Boolean = true,
     val enableUiText: Boolean = true,
     val enableTap: Boolean = true,
+    val enableEngagement: Boolean = true,
     val enableNotification: Boolean = true,
     val enableLocation: Boolean = true,
     val enableOcr: Boolean = true,
@@ -115,6 +116,7 @@ class SettingsStore(context: Context) {
     suspend fun setUsage(enabled: Boolean) = setFlag(Keys.USAGE, enabled) { copy(enableUsage = enabled) }
     suspend fun setUiText(enabled: Boolean) = setFlag(Keys.UI_TEXT, enabled) { copy(enableUiText = enabled) }
     suspend fun setTap(enabled: Boolean) = setFlag(Keys.TAP, enabled) { copy(enableTap = enabled) }
+    suspend fun setEngagement(enabled: Boolean) = setFlag(Keys.ENGAGEMENT, enabled) { copy(enableEngagement = enabled) }
     suspend fun setNotification(enabled: Boolean) = setFlag(Keys.NOTIFICATION, enabled) { copy(enableNotification = enabled) }
     suspend fun setLocationEnabled(enabled: Boolean) = setFlag(Keys.LOCATION, enabled) { copy(enableLocation = enabled) }
     suspend fun setOcrEnabled(enabled: Boolean) = setFlag(Keys.OCR, enabled) { copy(enableOcr = enabled) }
@@ -198,6 +200,7 @@ class SettingsStore(context: Context) {
             enableUsage = this[Keys.USAGE] ?: this[Keys.APP_SWITCH] ?: true,
             enableUiText = this[Keys.UI_TEXT] ?: true,
             enableTap = this[Keys.TAP] ?: true,
+            enableEngagement = this[Keys.ENGAGEMENT] ?: true,
             enableNotification = this[Keys.NOTIFICATION] ?: true,
             enableLocation = this[Keys.LOCATION] ?: true,
             enableOcr = this[Keys.OCR] ?: true,
@@ -225,6 +228,7 @@ class SettingsStore(context: Context) {
         val USAGE = booleanPreferencesKey("enable_usage")
         val UI_TEXT = booleanPreferencesKey("enable_ui_text")
         val TAP = booleanPreferencesKey("enable_tap")
+        val ENGAGEMENT = booleanPreferencesKey("enable_engagement")
         val NOTIFICATION = booleanPreferencesKey("enable_notification")
         val LOCATION = booleanPreferencesKey("enable_location")
         val OCR = booleanPreferencesKey("enable_ocr")

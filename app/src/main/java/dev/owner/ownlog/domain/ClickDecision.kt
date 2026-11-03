@@ -7,6 +7,9 @@ data class ClickSnap(
     val className: String?,
     val isPassword: Boolean,
     val inputType: Int,
+    val parentViewId: String? = null,
+    val parentText: String? = null,
+    val parentContentDescription: String? = null,
 )
 
 data class ClickDecision(
